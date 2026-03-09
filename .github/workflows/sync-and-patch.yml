@@ -1,0 +1,67 @@
+name: Sync Upstream & Apply Patches
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # runs daily at 06:00 UTC
+  workflow_dispatch:        # allows manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout your fork
+        uses: actions/checkout@v4
+        with:
+          ref: stable
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/Dictionarry-Hub/database.git || true
+          git fetch upstream stable
+
+      - name: Check for new upstream commits
+        id: check
+        run: |
+          LOCAL=$(git rev-parse HEAD)
+          UPSTREAM=$(git rev-parse upstream/stable)
+          echo "local=$LOCAL" >> $GITHUB_OUTPUT
+          echo "upstream=$UPSTREAM" >> $GITHUB_OUTPUT
+          if [ "$LOCAL" = "$UPSTREAM" ]; then
+            echo "up_to_date=true" >> $GITHUB_OUTPUT
+          else
+            echo "up_to_date=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Merge upstream changes
+        if: steps.check.outputs.up_to_date == 'false'
+        run: |
+          git merge upstream/stable --no-edit
+
+      - name: Apply patch – replace must_original with must_english
+        if: steps.check.outputs.up_to_date == 'false'
+        run: |
+          find profiles/ -name "*.yml" -exec \
+            sed -i 's/language: must_original/language: must_english/g' {} +
+
+      - name: Commit patched files
+        if: steps.check.outputs.up_to_date == 'false'
+        run: |
+          git add profiles/
+          # Only commit if there are changes
+          git diff --cached --quiet || \
+            git commit -m "chore: apply patches on top of upstream sync"
+
+      - name: Push to fork
+        if: steps.check.outputs.up_to_date == 'false'
+        run: |
+          git push origin stable
