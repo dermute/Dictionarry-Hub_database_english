@@ -2,8 +2,8 @@ name: Sync Upstream & Apply Patches
 
 on:
   schedule:
-    - cron: '0 6 * * *'   # runs daily at 06:00 UTC
-  workflow_dispatch:        # allows manual trigger
+    - cron: '0 6 * * *'
+  workflow_dispatch:
 
 jobs:
   sync:
@@ -47,6 +47,15 @@ jobs:
         run: |
           git merge upstream/stable --no-edit
 
+      - name: Disable upstream workflows
+        if: steps.check.outputs.up_to_date == 'false'
+        run: |
+          if [ -d ".github/workflows" ]; then
+            # Remove all upstream workflow files except our own sync workflow
+            find .github/workflows/ -name "*.yml" -not -name "sync-upstream.yml" -delete
+            find .github/workflows/ -name "*.yaml" -not -name "sync-upstream.yml" -delete
+          fi
+
       - name: Apply patch – replace must_original with must_english
         if: steps.check.outputs.up_to_date == 'false'
         run: |
@@ -56,8 +65,7 @@ jobs:
       - name: Commit patched files
         if: steps.check.outputs.up_to_date == 'false'
         run: |
-          git add profiles/
-          # Only commit if there are changes
+          git add profiles/ .github/workflows/
           git diff --cached --quiet || \
             git commit -m "chore: apply patches on top of upstream sync"
 
