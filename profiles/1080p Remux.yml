@@ -305,4 +305,4 @@ upgrade_until:
   name: 1080p Remux
   description: All capable of being indistinguishable from source. WEB-DL included
     to not allow unknown encode to trump known WEB-DL.
-language: must_original
+language: must_english
