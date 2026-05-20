@@ -16,7 +16,7 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout v2
+      - name: Checkout v4
         uses: actions/checkout@v4
         with:
           ref: v2
