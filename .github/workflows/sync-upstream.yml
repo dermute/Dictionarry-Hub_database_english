@@ -1,0 +1,61 @@
+name: Sync upstream nightly
+
+on:
+  schedule:
+    - cron: "17 3 * * *"  # daily at 03:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout v2
+        uses: actions/checkout@v4
+        with:
+          ref: v2
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: git remote add upstream https://github.com/Dictionarry-Hub/database.git
+
+      - name: Fetch upstream
+        run: git fetch upstream v2
+
+      - name: Merge upstream/v2 (prefer our resolutions on conflict)
+        run: |
+          if git merge upstream/v2 --no-edit -X ours; then
+            echo "Merge succeeded."
+          else
+            echo "::error::Merge produced unresolved conflicts. Manual fix required."
+            git merge --abort || true
+            exit 1
+          fi
+
+      - name: Re-enforce removal of upstream workflows
+        run: |
+          rm -f .github/workflows/notify.yml .github/workflows/devSync.yml
+          if ! git diff --quiet; then
+            git add -A .github/workflows
+            git commit -m "chore: re-strip upstream workflows after sync"
+          fi
+
+      - name: Push if anything changed
+        run: |
+          if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/v2)" ]; then
+            echo "No new commits to push."
+          else
+            git push origin v2
+          fi
