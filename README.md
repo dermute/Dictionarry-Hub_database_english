@@ -1,3 +1,8 @@
+> [!CAUTION]
+> This version is deprecated!
+> - With the release of profilaarr v2 the focus changed, sticking with original profiles, but adding german equivalents (tough not fully functioning for automation at the time of deprecating this version).
+> - Check out https://github.com/dermute/Dictionarry-Hub_database_german/tree/v2
+
 # Dictionarry-Hub Database — English Patch
 
 A automatically patched fork of the [Dictionarry-Hub/database](https://github.com/Dictionarry-Hub/database)
