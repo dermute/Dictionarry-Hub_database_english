@@ -134,7 +134,8 @@ WHERE qp.name LIKE '% german'
       AND language_name = 'German'
   );
 
--- 9) Copy custom-format scores, overriding "German DL" and "Not Original or English" from -999999 to 0 
+-- 9) Copy custom-format scores: reward "German DL" (+5000), neutralise
+--    "Not Original or English" (0)
 INSERT INTO quality_profile_custom_formats (
   quality_profile_name, custom_format_name, arr_type, score
 )
@@ -142,7 +143,11 @@ SELECT
   src.quality_profile_name || ' german',
   src.custom_format_name,
   src.arr_type,
-  CASE WHEN src.custom_format_name IN  ('German DL', 'Not Original or English') THEN 0 ELSE src.score END
+  CASE
+    WHEN src.custom_format_name = 'German DL' THEN 5000
+    WHEN src.custom_format_name = 'Not Original or English' THEN 0
+    ELSE src.score
+  END
 FROM quality_profile_custom_formats src
 WHERE src.quality_profile_name NOT LIKE '% german'
   AND EXISTS (
@@ -154,3 +159,12 @@ WHERE src.quality_profile_name NOT LIKE '% german'
       AND custom_format_name = src.custom_format_name
       AND arr_type = src.arr_type
   );
+
+-- 9a) Retrofit existing variants: step 9's INSERT is a no-op once the row
+--     already exists, so bump "German DL" from the old neutral 0 up to +5000
+--     here. Idempotent: once a row is 5000 it no longer matches score = 0.
+UPDATE quality_profile_custom_formats
+SET score = 5000
+WHERE quality_profile_name LIKE '% german'
+  AND custom_format_name = 'German DL'
+  AND score = 0;
