@@ -135,7 +135,9 @@ WHERE qp.name LIKE '% german'
   );
 
 -- 9) Copy custom-format scores: reward "German DL" (+5000), neutralise
---    "Not Original or English" (0)
+--    "Not Original or English" and the dual-audio / foreign-language group
+--    bans (0). Those upstream bans reject dual/foreign audio, which is
+--    exactly what we WANT in a German profile.
 INSERT INTO quality_profile_custom_formats (
   quality_profile_name, custom_format_name, arr_type, score
 )
@@ -145,7 +147,11 @@ SELECT
   src.arr_type,
   CASE
     WHEN src.custom_format_name = 'German DL' THEN 5000
-    WHEN src.custom_format_name = 'Not Original or English' THEN 0
+    WHEN src.custom_format_name IN (
+      'Not Original or English',
+      'Banned Language Groups',
+      'Banned Dual Audio Groups'
+    ) THEN 0
     ELSE src.score
   END
 FROM quality_profile_custom_formats src
@@ -168,3 +174,14 @@ SET score = 5000
 WHERE quality_profile_name LIKE '% german'
   AND custom_format_name = 'German DL'
   AND score = 0;
+
+-- 9b) Retrofit existing variants: un-ban the dual-audio / foreign-language
+--     release-group CFs on the German side (-999999 -> 0). Covers both
+--     radarr and sonarr rows. Idempotent: once 0 they no longer match
+--     score = -999999. "Banned Groups (Release Title)" is deliberately left
+--     enforcing -- it bans for quality/scene reasons, not foreign audio.
+UPDATE quality_profile_custom_formats
+SET score = 0
+WHERE quality_profile_name LIKE '% german'
+  AND custom_format_name IN ('Banned Language Groups', 'Banned Dual Audio Groups')
+  AND score = -999999;
