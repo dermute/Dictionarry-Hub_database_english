@@ -185,3 +185,63 @@ SET score = 0
 WHERE quality_profile_name LIKE '% german'
   AND custom_format_name IN ('Banned Language Groups', 'Banned Dual Audio Groups')
   AND score = -999999;
+
+-- ============================================================================
+-- 10) Force German for real.
+--
+-- The profile "must German" language field is only enforced by Radarr, not
+-- Sonarr, so on its own it lets non-German releases through in Sonarr. Upstream
+-- forces Original/English via the "Not Original or English" custom format at
+-- -999999 (anything matching falls below minimum_custom_format_score and is
+-- rejected in BOTH arrs) -- but our fork neutralises that CF to 0, leaving no
+-- language gate at all.
+--
+-- So we create the mirror image, "Not German": a single negated German language
+-- condition that matches any release WITHOUT a German audio track, and score it
+-- -999999 in every German variant. German and German-DL releases contain German
+-- and are unaffected; non-German releases are rejected in Radarr and Sonarr.
+-- ============================================================================
+
+-- 10a) Create the "Not German" custom format (idempotent)
+INSERT INTO custom_formats (name, description)
+SELECT 'Not German',
+       'Matches releases that do not include a German audio track. Other languages are allowed.'
+WHERE NOT EXISTS (SELECT 1 FROM custom_formats WHERE name = 'Not German');
+
+INSERT INTO custom_format_conditions (custom_format_name, name, type, arr_type, negate, required)
+SELECT 'Not German', 'German', 'language', 'all', 1, 1
+WHERE NOT EXISTS (
+  SELECT 1 FROM custom_format_conditions
+  WHERE custom_format_name = 'Not German' AND name = 'German'
+);
+
+INSERT INTO condition_languages (custom_format_name, condition_name, language_name, except_language)
+SELECT 'Not German', 'German', 'German', 0
+WHERE NOT EXISTS (
+  SELECT 1 FROM condition_languages
+  WHERE custom_format_name = 'Not German' AND condition_name = 'German'
+);
+
+INSERT INTO tags (name)
+SELECT 'Language' WHERE NOT EXISTS (SELECT 1 FROM tags WHERE name = 'Language');
+
+INSERT INTO custom_format_tags (custom_format_name, tag_name)
+SELECT 'Not German', 'Language'
+WHERE NOT EXISTS (
+  SELECT 1 FROM custom_format_tags
+  WHERE custom_format_name = 'Not German' AND tag_name = 'Language'
+);
+
+-- 10b) Reject non-German releases in every German variant, for both arrs
+--      (-999999). Idempotent: the guard skips rows that already exist.
+INSERT INTO quality_profile_custom_formats (quality_profile_name, custom_format_name, arr_type, score)
+SELECT qp.name, 'Not German', a.arr_type, -999999
+FROM quality_profiles qp
+CROSS JOIN (SELECT 'radarr' AS arr_type UNION ALL SELECT 'sonarr') a
+WHERE qp.name LIKE '% german'
+  AND NOT EXISTS (
+    SELECT 1 FROM quality_profile_custom_formats
+    WHERE quality_profile_name = qp.name
+      AND custom_format_name = 'Not German'
+      AND arr_type = a.arr_type
+  );
