@@ -1,3 +1,43 @@
+# Dictionarry Database — Experimental x265 branch
+
+> **Branch `experimental/x265-grouped-preference`.** This branch adds two experimental
+> profiles on top of the German-variants fork. It is **not** merged into `v2` and is **not**
+> covered by the nightly upstream sync — deploy from it deliberately.
+
+## Hard grouped-x265 Efficient profiles
+
+This branch adds **`1080p Efficient x265`** and its auto-generated German sibling
+**`1080p Efficient x265 german`**, both forked from `1080p Efficient`. They flip the codec
+preference: instead of favouring trusted x264 encodes (Dictionarry's default at 1080p), they
+**prefer x265 — but only when the release has a real release group.**
+
+- **The rule (hard preference):** any x265 release *with a (non-banned) release group* outranks
+  **every** x264, including top-tier x264 groups. This is done with two group-gated source CFs,
+  `1080p Bluray (x265)` (**1,900,000**) and `1080p WEB-DL (x265)` (**1,850,000**), scored above
+  the real x264 ceiling — a premium x264 Bluray already stacks to ~1,581,000
+  (`1080p Balanced Tier 1` 881,000 + `1080p Bluray (x264)` 700,000).
+- **What stays rejected:** x265 with **no** release group. The x265 reward is gated on a release
+  group being present, so a group-less x265 stays at `Banned Groups` = `-999999` (below the
+  200,000 minimum) and is dropped. The notorious x265 re-encoders inherited from the base profile
+  stay banned too: **MeGusta, PSA, NiCEHEVC, NaNi, NIMA4K, nikt0, pmHD, RARBG**.
+- **x264 is not banned** — it keeps its normal score (above the minimum), so it's still an
+  acceptable *fallback* when no grouped x265 exists; it just always ranks below grouped x265.
+- **Curated x265 still wins the tie:** groups already tiered upstream (HONE, QxR, TAoE, NAN0, SQS,
+  Vialle, Weasley) keep their existing scores *and* the new source bonus, so they rank highest
+  among x265.
+- **Known trade-off of "hard":** because the lowest grouped x265 (WEB, 1,850,000) exceeds the
+  highest x264 (Bluray, ~1,581,000), a 1080p x265 **WEB-DL** will outrank a 1080p x264 **Bluray**.
+  That's the direct consequence of "always beats x264." To soften, drop `1080p WEB-DL (x265)`
+  below the x264 Bluray total (e.g. `1,550,000`) in
+  [`ops/99999990.create-x265-efficient-profile.sql`](ops/99999990.create-x265-efficient-profile.sql).
+
+All of the above lives in one idempotent migration,
+[`ops/99999990.create-x265-efficient-profile.sql`](ops/99999990.create-x265-efficient-profile.sql),
+which clones the base profile and applies the rescoring; the German sibling is produced
+automatically by the German-variants migration described below.
+
+---
+
 # Dictionarry Database — German Variants Fork
 
 Personal fork of [Dictionarry-Hub/database](https://github.com/Dictionarry-Hub/database) (branch `v2`) that keeps every upstream quality profile as-is **and** adds a German-language sibling for each one.
